@@ -1,0 +1,13 @@
+# Gunakan image Python 3.9 yang lebih stabil
+FROM python:3.9-slim
+
+# Set working directory di dalam container
+WORKDIR /app
+
+# Instal dependencies (FastAPI, Pandas, Psycopg2, Redis, Gunicorn)
+RUN pip install fastapi uvicorn[standard] psycopg2-binary pandas python-multipart redis gunicorn rq
+# Salin kode aplikasi (main.py, db_config.py, routers/, models/, dll.)
+COPY . /app
+
+# Perintah untuk menjalankan aplikasi (Gunicorn - Exec Form yang stabil)
+CMD ["gunicorn", "main:app", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8003"]

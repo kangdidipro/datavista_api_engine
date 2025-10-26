@@ -1,0 +1,19 @@
+# --- Dependencies dan Environment ---
+venv/
+__pycache__/
+*.pyc
+
+# --- Docker dan Containers ---
+# File-file ini dibuat otomatis dan tidak boleh di-versioning
+/datavista_api_engine/
+/datavista_postgres/
+/datavista_redis/
+/datavista_gpu_worker/
+
+# Menghindari pengarsipan Volume Data
+*.tar.gz
+*.zip
+
+# Log dan file sementara
+*.log
+.DS_Store

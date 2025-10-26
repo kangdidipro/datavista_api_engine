@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  # ----------------------------------------------------
+  # 1. DATA API ENGINE (FastAPI)
+  # ----------------------------------------------------
+  api_engine:
+    build: . # Build dari Dockerfile di direktori ini
+    container_name: datavista_api
+    restart: always
+    command: ["gunicorn", "main:app", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8003"]
+    ports:
+      - "8003:8003" # Expose port 8003 ke host WSL Anda
+    environment:
+      # Environment vars ini sesuai db_config.py (digunakan saat startup)
+      POSTGRES_HOST: postgres_db
+      REDIS_HOST: redis_broker
+      POSTGRES_USER: datavista_api_user
+      POSTGRES_PASSWORD: DatavistaAPI@2025
+      POSTGRES_DB: datavista_db
+      API_KEY: YOUR_SECURE_API_KEY
+    depends_on:
+      redis_broker:
+        condition: service_started
+
+  # ----------------------------------------------------
+  # 2. POSTGRESQL (Database Utama - Solusi Docker)
+  # ----------------------------------------------------
+  postgres_db:
+    image: postgres:14-alpine # Versi stabil PostgreSQL
+    container_name: datavista_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: datavista_api_user
+      POSTGRES_PASSWORD: DatavistaAPI@2025
+      POSTGRES_DB: datavista_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432" # <-- MAP 5432 CONTAINER KE 5433 HOST
+
+  # ----------------------------------------------------
+  # 3. REDIS (Message Broker - Solusi Docker)
+  # ----------------------------------------------------
+  redis_broker:
+    image: redis:6.2-alpine # Versi Redis stabil
+    container_name: datavista_redis
+    restart: always
+    volumes:
+      - redis_data:/data
+
+# ----------------------------------------------------
+  # 4. GPU WORKER (YOLOv8 Processing Engine)
+  # ----------------------------------------------------
+  gpu_worker:
+    build: . # Menggunakan Dockerfile yang sama (kita akan perbarui untuk GPU)
+    container_name: datavista_gpu_worker
+    restart: always
+    environment:
+      # Harus sama dengan API Engine untuk koneksi DB/Redis
+      POSTGRES_HOST: postgres_db
+      REDIS_HOST: redis_broker
+      # ... (environment lain)
+    # Perintah: Menjalankan skrip worker Python
+    command: python worker.py 
+    # VOLUME MOUNT: Memungkinkan worker mengakses file yang di-upload oleh API
+    volumes:
+      - ./app/routers:/app/routers  # Jika diperlukan untuk import
+      - video_storage:/tmp/datavista_videos # Mount lokasi penyimpanan file video      
+
+volumes:
+  postgres_data:
+  redis_data:
+  video_storage: # <--- VOLUME BARU UNTUK BERBAGI FILE VIDEO
