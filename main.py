@@ -88,14 +88,6 @@ async def check_database_status():
 
 # --- 4. INTEGRASI ROUTERS UTAMA ---
 
-from database import engine, Base, get_db_connection, create_initial_tables
-
-Base.metadata.create_all(bind=engine)
-
-# Inisialisasi skema database saat startup aplikasi
-with get_db_connection() as conn:
-    create_initial_tables(conn)
-
 app.include_router(import_router)
 app.include_router(anomaly_router)
 app.include_router(video_router)

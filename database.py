@@ -121,6 +121,7 @@ def create_summary_entry(
     file_name,
     title,
     total_records_inserted,
+    total_records_read, # New parameter
     total_volume,
     total_penjualan,
     total_operator,
@@ -147,7 +148,7 @@ def create_summary_entry(
     """Membuat entry baru di tabel summary dan mengembalikan summary_id."""
     insert_query = sql.SQL("""
         INSERT INTO {} (
-            import_datetime, import_duration, file_name, title, total_records_inserted,
+            import_datetime, import_duration, file_name, title, total_records_inserted, total_records_read,
             total_volume, total_penjualan, total_operator, produk_jbt, produk_jbkt,
             total_volume_liter, total_penjualan_rupiah, total_mode_transaksi,
             total_plat_nomor, total_nik, total_sektor_non_kendaraan,
@@ -156,7 +157,7 @@ def create_summary_entry(
             total_warna_plat_putih, total_mor, total_provinsi, total_kota_kabupaten,
             total_no_spbu
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         RETURNING summary_id
     """).format(sql.Identifier(SUMMARY_TABLE))
     
@@ -164,7 +165,7 @@ def create_summary_entry(
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
                 cursor.execute(insert_query, (
-                    import_datetime, import_duration, file_name, title, total_records_inserted,
+                    import_datetime, import_duration, file_name, title, total_records_inserted, total_records_read,
                     total_volume, total_penjualan, total_operator, produk_jbt, produk_jbkt,
                     total_volume_liter, total_penjualan_rupiah, total_mode_transaksi,
                     total_plat_nomor, total_nik, total_sektor_non_kendaraan,
@@ -180,8 +181,27 @@ def create_summary_entry(
         logging.error(f"Failed to create summary entry: {e}", exc_info=True)
         raise e
 
-# --- 3. LOGIC PEMBUATAN TABEL AWAL (Untuk digunakan di Docker Entrypoint) ---
+def update_summary_total_records(summary_id: int, total_records_inserted: int):
+    """
+    Memperbarui total_records_inserted untuk entry summary yang sudah ada.
+    """
+    logging.warning(f"--- [DIAGNOSTIC] Calling update_summary_total_records for summary_id: {summary_id} with total_records_inserted: {total_records_inserted} ---")
+    update_query = sql.SQL("""
+        UPDATE {} SET total_records_inserted = %s WHERE summary_id = %s
+    """).format(sql.Identifier(SUMMARY_TABLE))
 
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(update_query, (total_records_inserted, summary_id))
+                logging.warning(f"--- [DIAGNOSTIC] Update query executed. Rows affected: {cursor.rowcount} ---")
+                conn.commit()
+                logging.warning(f"--- [DIAGNOSTIC] Update committed for summary_id: {summary_id} ---")
+    except Exception as e:
+        logging.error(f"Failed to update summary total records: {e}", exc_info=True)
+        raise e
+
+# --- 3. LOGIC PEMBUATAN TABEL AWAL (Untuk digunakan di Docker Entrypoint) ---
 def create_initial_tables(conn):
     """Membuat tabel log transaksi dan summary jika belum ada."""
 

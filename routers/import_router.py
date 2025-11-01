@@ -10,7 +10,7 @@ import json
 from datetime import datetime
 # Import Absolut yang sudah dikoreksi:
 # from models.schemas import TransactionData
-from database import bulk_insert_transactions, get_db_connection, create_initial_tables, create_summary_entry
+from database import bulk_insert_transactions, get_db_connection, create_summary_entry, update_summary_total_records
 
 
 router = APIRouter(prefix="/v1/import", tags=["CSV Bulk Import"])
@@ -97,15 +97,13 @@ async def import_csv_to_db(
         df_aligned = df[cols_for_insert]
         data_to_insert = [tuple(row) for row in df_aligned.values]
 
-        # 4. MEMBUAT SUMMARY ENTRY
-        # Lakukan agregasi untuk semua kolom summary yang baru
+        # 4. MEMBUAT SUMMARY ENTRY AWAL (dengan total_records_inserted = 0)
         total_volume = df['volume_liter'].sum()
         total_penjualan = df['penjualan_rupiah'].astype(float).sum() # Pastikan tipe data numerik
 
-        # Hitung jumlah unik untuk kolom-kolom yang relevan
         total_operator = df['operator'].nunique()
-        produk_jbt = df[df['produk'].isin(['BIO_SOLAR', 'PERTALITE'])]['produk'].nunique() # Contoh, sesuaikan dengan definisi JBT
-        produk_jbkt = df[~df['produk'].isin(['BIO_SOLAR', 'PERTALITE'])]['produk'].nunique() # Contoh, sesuaikan dengan definisi JBKT
+        produk_jbt = df[df['produk'].isin(['BIO_SOLAR', 'PERTALITE'])]['produk'].nunique()
+        produk_jbkt = df[~df['produk'].isin(['BIO_SOLAR', 'PERTALITE'])]['produk'].nunique()
 
         total_volume_liter = df['volume_liter'].sum()
         total_penjualan_rupiah = df['penjualan_rupiah'].astype(float).sum()
@@ -132,14 +130,18 @@ async def import_csv_to_db(
         end_time = time.perf_counter()
         duration_ms = int((end_time - start_time) * 1000)
 
+        logging.warning(f"--- [DIAGNOSTIC] df.shape[0] (total records in CSV after processing): {df.shape[0]} ---")
+
+        # Buat entry summary awal dengan total_records_inserted = 0
         summary_id = create_summary_entry(
             import_datetime=datetime.now(),
             import_duration=float(duration_ms / 1000), # Convert ms to seconds
             file_name=file_name,
             title=file_name, # Default title is the file name
-            total_records_inserted=int(len(data_to_insert)),
+            total_records_inserted=0, # Akan diupdate setelah bulk insert
+            total_records_read=df.shape[0], # Total records read from CSV
             total_volume=float(total_volume),
-            total_penjualan=str(total_penjualan), # Keep as string for now, adjust if needed
+            total_penjualan=str(total_penjualan),
             total_operator=float(total_operator),
             produk_jbt=str(produk_jbt),
             produk_jbkt=str(produk_jbkt),
@@ -166,6 +168,11 @@ async def import_csv_to_db(
         # 5. EKSEKUSI BULK INSERT
         logging.warning("--- [DIAGNOSTIC] Calling bulk_insert_transactions ---")
         rows_inserted = bulk_insert_transactions(data_to_insert, summary_id)
+        logging.warning(f"--- [DIAGNOSTIC] Bulk insert completed. {rows_inserted} rows inserted. ---")
+
+        # Update total_records_inserted di summary entry
+        update_summary_total_records(summary_id, rows_inserted)
+        logging.warning(f"--- [DIAGNOSTIC] Updated summary {summary_id} with {rows_inserted} records inserted. ---")
 
         return JSONResponse(
             status_code=status.HTTP_201_CREATED,
