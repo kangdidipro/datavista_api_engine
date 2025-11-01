@@ -1,23 +1,24 @@
 import os
+import logging
 
 # --- KONFIGURASI DOCKER INTERNAL (Sesuai docker-compose.yml) ---
 
 POSTGRES_CONFIG = {
-    # HOST: Gunakan nama service Docker untuk koneksi internal
-    "host": os.getenv("POSTGRES_HOST", "postgres_db"), 
-    "port": os.getenv("POSTGRES_PORT", "5432"),  
-    "user": os.getenv("POSTGRES_USER", "datavista_api_user"), 
-    # PASSWORD: Menggunakan password yang disepakati untuk testing
-    "password": os.getenv("POSTGRES_PASSWORD", "DatavistaAPI@2025"), 
-    "database": os.getenv("POSTGRES_DB", "datavista_db"), 
+    "host": os.getenv("POSTGRES_HOST", "datavista_postgres"),
+    "port": os.getenv("POSTGRES_PORT", "5432"),
+    "user": os.getenv("POSTGRES_USER", "datavista_api_user"),
+    "password": os.getenv("POSTGRES_PASSWORD", "DatavistaAPI@2025"),
+    "database": os.getenv("POSTGRES_DB", "datavista_db")
 }
+logging.warning(f"[DIAGNOSTIC] POSTGRES_CONFIG: {POSTGRES_CONFIG}")
 
 REDIS_CONFIG = {
     # HOST: Gunakan nama service Docker untuk koneksi internal
-    "host": os.getenv("REDIS_HOST", "redis_broker"), 
+    "host": os.getenv("REDIS_HOST", "datavista_redis"), 
     "port": os.getenv("REDIS_PORT", 6379),
     "db": 0,
 }
+logging.warning(f"[DIAGNOSTIC] REDIS_CONFIG: {REDIS_CONFIG}")
 
 # --- KONFIGURASI HOST LOKAL UNTUK INISIALISASI (Akses via Port 5433) ---
 HOST_INIT_CONFIG = {

@@ -1,6 +1,10 @@
 from fastapi import FastAPI, HTTPException, status # <-- PASTI FastAPI ADA DI SINI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from dotenv import load_dotenv
+
+# Muat variabel lingkungan dari .env file
+load_dotenv()
 
 # CRITICAL IMPORTS FOR DATABASE & REDIS CHECK
 from db_config import POSTGRES_CONFIG, REDIS_CONFIG
@@ -10,6 +14,8 @@ import redis
 # Import Router (Absolut - Sudah LULUS troubleshooting path)
 from routers.import_router import router as import_router
 from routers.video_router import router as video_router
+from routers.anomaly_router import router as anomaly_router
+from routers.export_router import router as export_router
 
 
 # --- 1. INISIALISASI APLIKASI (DEKLARASI 'app' - CRITICAL FIX) ---
@@ -82,5 +88,15 @@ async def check_database_status():
 
 # --- 4. INTEGRASI ROUTERS UTAMA ---
 
+from database import engine, Base, get_db_connection, create_initial_tables
+
+Base.metadata.create_all(bind=engine)
+
+# Inisialisasi skema database saat startup aplikasi
+with get_db_connection() as conn:
+    create_initial_tables(conn)
+
 app.include_router(import_router)
+app.include_router(anomaly_router)
 app.include_router(video_router)
+app.include_router(export_router)

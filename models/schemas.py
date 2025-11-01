@@ -1,45 +1,49 @@
-from pydantic import BaseModel, Field
-from datetime import date, time, datetime
-from typing import Optional
+from pydantic import BaseModel
+from typing import List, Optional
+from datetime import datetime
 
-# --- MODEL DATA INPUT CSV (Diperlukan untuk Validasi Pandas) ---
-# Skema ini mencerminkan kolom dari file CSV Anda
+class AnomalyTemplateMasterBase(BaseModel):
+    role_name: str
+    description: Optional[str] = None
+    is_default: bool = False
+    created_by: Optional[str] = None
 
-class TransactionData(BaseModel):
-    """
-    Model untuk memvalidasi satu baris data transaksi dari CSV.
-    """
-    transaction_id_asersi: str = Field(..., max_length=50)
-    tanggal: date = Field(..., description="Format: YYYY-MM-DD")
-    jam: time = Field(..., description="Format: HH:MM:SS")
-    mor: Optional[int] = Field(None)
-    provinsi: str = Field(..., max_length=50)
-    kota_kabupaten: str = Field(..., max_length=50)
-    no_spbu: str = Field(..., max_length=20)
-    no_nozzle: Optional[str] = Field(None, max_length=20)
-    no_dispenser: Optional[str] = Field(None, max_length=50)
-    produk: str = Field(..., max_length=50)
-    volume_liter: float = Field(..., description="Volume harus berupa angka desimal.")
-    penjualan_rupiah: str = Field(..., max_length=50)
-    operator: Optional[str] = Field(None, max_length=50)
-    mode_transaksi: Optional[str] = Field(None, max_length=50)
-    plat_nomor: Optional[str] = Field(None, max_length=20)
-    nik: Optional[str] = Field(None, max_length=30)
-    sektor_non_kendaraan: Optional[str] = Field(None, max_length=50)
-    jumlah_roda_kendaraan: Optional[str] = Field(None, max_length=50)
-    kuota: Optional[float] = Field(None)
-    warna_plat: Optional[str] = Field(None, max_length=20)
+class AnomalyTemplateMasterCreate(AnomalyTemplateMasterBase):
+    pass
+
+class AnomalyTemplateMaster(AnomalyTemplateMasterBase):
+    template_id: int
+    created_datetime: datetime
+    last_modified: datetime
+
+    class Config:
+        orm_mode = True
+
+class TransactionAnomalyCriteria(BaseModel):
+    criteria_id: int
+    anomaly_type: str
+    min_volume_liter: int
+    plate_color: Optional[List[str]] = None
+    consumer_type: str
+    description: Optional[str] = None
+    is_active: bool
+
+    class Config:
+        orm_mode = True
+
+class SpecialAnomalyCriteria(BaseModel):
+    special_criteria_id: int
+    criteria_code: str
+    criteria_name: str
+    value: Optional[str] = None
+    unit: Optional[str] = None
+    violation_rule: str
+    description: Optional[str] = None
+
+    class Config:
+        orm_mode = True
 
 
-# --- MODEL LOG ANALISIS VIDEO ---
 
-class VideoLogEntry(BaseModel):
-    """
-    Model yang digunakan Worker untuk mencatat hasil analisis video ke DB.
-    """
-    video_path: str = Field(..., description="Lokasi file video di storage.")
-    log_datetime: Optional[datetime] = Field(None, description="Hasil deteksi datetime (YOLOv8).")
-    detected_plat: Optional[str] = Field(None, max_length=20, description="Hasil deteksi plat nomor (YOLOv8 + OCR).")
-    worker_id: str = Field(..., max_length=10)
-    status: str = Field(..., max_length=20)
-    message: Optional[str] = Field(None)
+class AnalysisRequest(BaseModel):
+    template_id: Optional[int] = None

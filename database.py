@@ -1,12 +1,36 @@
+import logging
 from db_config import POSTGRES_CONFIG
 from contextlib import contextmanager
 from typing import List, Tuple
+from sqlalchemy import create_engine, URL
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.declarative import declarative_base
 
 from fastapi import HTTPException 
 import psycopg2
 from psycopg2 import sql, extras
 import pandas as pd
 import sys
+
+# --- SQLAlchemy Setup ---
+SQLALCHEMY_DATABASE_URL = URL.create(
+    "postgresql",
+    username=POSTGRES_CONFIG['user'],
+    password=POSTGRES_CONFIG['password'],
+    host=POSTGRES_CONFIG['host'],
+    port=POSTGRES_CONFIG['port'],
+    database=POSTGRES_CONFIG['database']
+)
+engine = create_engine(SQLALCHEMY_DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 # --- KONFIGURASI NAMA TABEL ---
 TRANSACTION_TABLE = "csv_import_log"
@@ -23,15 +47,22 @@ def get_db_connection(config=None): # <--- TAMBAHKAN ARGUMEN INI
     conn = None
 
     # Koreksi: Set conn_config secara eksplisit di awal scope
-    conn_config = config if config else POSTGRES_CONFI
+    conn_config = config if config else POSTGRES_CONFIG
 
+    # DIAGNOSTIC LOG: Cetak konfigurasi yang digunakan
+    logging.warning("--- [DIAGNOSTIC] Attempting DB Connection ---")
+    for key, value in conn_config.items():
+        if key != "password":
+            logging.warning(f"[DIAGNOSTIC] Using config: {key} = {value}")
+    logging.warning("------------------------------------------")
+    
     from fastapi import HTTPException
     
     try:
         conn = psycopg2.connect(**conn_config) # <--- GUNAKAN conn_config
         yield conn
     except psycopg2.Error as e:
-        print(f"Database connection error: {e}")
+        logging.error(f"Database connection error: {e}", exc_info=True)
         # HTTPException diimpor di dalam fungsi untuk menghindari conflict saat startup
         raise HTTPException(status_code=503, detail="Layanan Database tidak tersedia.")
     finally:
@@ -70,7 +101,7 @@ def bulk_insert_transactions(data_tuples: List[Tuple], summary_id: int):
     try:
         with get_db_connection() as conn:
             with conn.cursor() as cursor:
-                # Menggunakan execute_values untuk bulk insert yang efisien
+                logging.warning(f"[DIAGNOSTIC] Attempting bulk insert for {len(data_with_fk)} rows.")
                 extras.execute_values(
                     cursor,
                     insert_query,
@@ -78,11 +109,75 @@ def bulk_insert_transactions(data_tuples: List[Tuple], summary_id: int):
                     page_size=10000
                 )
                 conn.commit()
-                # Mengembalikan jumlah baris yang berhasil diinsert
+                logging.warning(f"[DIAGNOSTIC] Bulk insert committed. Rows affected: {cursor.rowcount}")
                 return cursor.rowcount
     except Exception as e:
-        print(f"Bulk insert failed: {e}")
-        # Di sini kita tidak Raise HTTPException karena ini adalah logic worker/utility
+        logging.error(f"Bulk insert failed: {e}", exc_info=True)
+        raise e
+
+def create_summary_entry(
+    import_datetime,
+    import_duration,
+    file_name,
+    title,
+    total_records_inserted,
+    total_volume,
+    total_penjualan,
+    total_operator,
+    produk_jbt,
+    produk_jbkt,
+    total_volume_liter,
+    total_penjualan_rupiah,
+    total_mode_transaksi,
+    total_plat_nomor,
+    total_nik,
+    total_sektor_non_kendaraan,
+    total_jumlah_roda_kendaraan_4,
+    total_jumlah_roda_kendaraan_6,
+    total_kuota,
+    total_warna_plat_kuning,
+    total_warna_plat_hitam,
+    total_warna_plat_merah,
+    total_warna_plat_putih,
+    total_mor,
+    total_provinsi,
+    total_kota_kabupaten,
+    total_no_spbu
+):
+    """Membuat entry baru di tabel summary dan mengembalikan summary_id."""
+    insert_query = sql.SQL("""
+        INSERT INTO {} (
+            import_datetime, import_duration, file_name, title, total_records_inserted,
+            total_volume, total_penjualan, total_operator, produk_jbt, produk_jbkt,
+            total_volume_liter, total_penjualan_rupiah, total_mode_transaksi,
+            total_plat_nomor, total_nik, total_sektor_non_kendaraan,
+            total_jumlah_roda_kendaraan_4, total_jumlah_roda_kendaraan_6, total_kuota,
+            total_warna_plat_kuning, total_warna_plat_hitam, total_warna_plat_merah,
+            total_warna_plat_putih, total_mor, total_provinsi, total_kota_kabupaten,
+            total_no_spbu
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        RETURNING summary_id
+    """).format(sql.Identifier(SUMMARY_TABLE))
+    
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(insert_query, (
+                    import_datetime, import_duration, file_name, title, total_records_inserted,
+                    total_volume, total_penjualan, total_operator, produk_jbt, produk_jbkt,
+                    total_volume_liter, total_penjualan_rupiah, total_mode_transaksi,
+                    total_plat_nomor, total_nik, total_sektor_non_kendaraan,
+                    total_jumlah_roda_kendaraan_4, total_jumlah_roda_kendaraan_6, total_kuota,
+                    total_warna_plat_kuning, total_warna_plat_hitam, total_warna_plat_merah,
+                    total_warna_plat_putih, total_mor, total_provinsi, total_kota_kabupaten,
+                    total_no_spbu
+                ))
+                summary_id = cursor.fetchone()[0]
+                conn.commit()
+                return summary_id
+    except Exception as e:
+        logging.error(f"Failed to create summary entry: {e}", exc_info=True)
         raise e
 
 # --- 3. LOGIC PEMBUATAN TABEL AWAL (Untuk digunakan di Docker Entrypoint) ---
@@ -100,15 +195,15 @@ def create_initial_tables(conn):
             CREATE TABLE IF NOT EXISTS {} (
                 transaction_id_asersi VARCHAR(50) NOT NULL PRIMARY KEY,
                 tanggal DATE NOT NULL,
-                jam TIME NOT NULL,
-                mor INT,
+                jam TIME WITHOUT TIME ZONE NOT NULL,
+                mor INTEGER,
                 provinsi VARCHAR(50),
                 kota_kabupaten VARCHAR(50),
                 no_spbu VARCHAR(20),
                 no_nozzle VARCHAR(20),
                 no_dispenser VARCHAR(50),
                 produk VARCHAR(50),
-                volume_liter DECIMAL(10,3),
+                volume_liter NUMERIC(10,3),
                 penjualan_rupiah VARCHAR(50),
                 operator VARCHAR(50),
                 mode_transaksi VARCHAR(50),
@@ -116,11 +211,10 @@ def create_initial_tables(conn):
                 nik VARCHAR(30),
                 sektor_non_kendaraan VARCHAR(50),
                 jumlah_roda_kendaraan VARCHAR(50),
-                kuota DECIMAL(10,1),
+                kuota NUMERIC(10,1),
                 warna_plat VARCHAR(20),
-                daily_summary_id INT
-                
-                CONSTRAINT fk_daily_summary FOREIGN KEY (daily_summary_id) 
+                daily_summary_id INTEGER,
+                CONSTRAINT fk_daily_summary FOREIGN KEY (daily_summary_id)
                     REFERENCES {} (summary_id) ON DELETE CASCADE
             );
         """).format(sql.Identifier(TRANSACTION_TABLE), sql.Identifier(SUMMARY_TABLE))
@@ -128,25 +222,45 @@ def create_initial_tables(conn):
         CREATE_SUMMARY_MASTER = sql.SQL("""
             CREATE TABLE IF NOT EXISTS {} (
                 summary_id SERIAL PRIMARY KEY,
-                import_datetime TIMESTAMP NOT NULL,
-                total_records_inserted INT,
-                spbu_codes_found VARCHAR(500),
-                total_volume DECIMAL(20,3),
-                total_penjualan VARCHAR(50)
+                import_datetime TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+                import_duration NUMERIC(20,3),
+                file_name VARCHAR(50),
+                title VARCHAR(50),
+                total_records_inserted INTEGER,
+                total_volume NUMERIC(20,3),
+                total_penjualan VARCHAR(50),
+                total_operator NUMERIC(20,3),
+                produk_jbt VARCHAR(50),
+                produk_jbkt VARCHAR(50),
+                total_volume_liter NUMERIC(10,3),
+                total_penjualan_rupiah VARCHAR(50),
+                total_mode_transaksi VARCHAR(50),
+                total_plat_nomor VARCHAR(20),
+                total_nik VARCHAR(30),
+                total_sektor_non_kendaraan VARCHAR(50),
+                total_jumlah_roda_kendaraan_4 VARCHAR(50),
+                total_jumlah_roda_kendaraan_6 VARCHAR(50),
+                total_kuota NUMERIC(10,1),
+                total_warna_plat_kuning VARCHAR(20),
+                total_warna_plat_hitam VARCHAR(20),
+                total_warna_plat_merah VARCHAR(20),
+                total_warna_plat_putih VARCHAR(20),
+                total_mor NUMERIC(20,3),
+                total_provinsi NUMERIC(20,3),
+                total_kota_kabupaten NUMERIC(20,3),
+                total_no_spbu NUMERIC(20,3)
             );
         """).format(sql.Identifier(SUMMARY_TABLE))
 
-        print(CREATE_TRANSACTION_LOG)
-        
         # Jalankan kueri
         cursor.execute(CREATE_SUMMARY_MASTER)
         cursor.execute(CREATE_TRANSACTION_LOG)
         conn.commit()
-        print("SCHEMAS CREATED SUCCESSFULLY") # Tanda keberhasilan
+        logging.warning("SCHEMAS CREATED SUCCESSFULLY") # Tanda keberhasilan
 
     except psycopg2.Error as e:
         # DEBUG KRITIS: Tampilkan error SQL sebenarnya
-        sys.stderr.write(f"\n[FATAL SQL SYNTAX ERROR]\n{e.pgerror}\n")
+        logging.error(f"\n[FATAL SQL SYNTAX ERROR]\n{e.pgerror}\n", exc_info=True)
         conn.rollback() # Batalkan transaksi jika ada error
         raise e # Re-raise error untuk menghentikan proses
 
