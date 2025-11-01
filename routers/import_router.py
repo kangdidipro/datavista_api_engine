@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, status
+from fastapi import APIRouter, UploadFile, File, HTTPException, status, Form
 from fastapi.responses import JSONResponse
 from typing import List
 import pandas as pd
@@ -10,7 +10,7 @@ import json
 from datetime import datetime
 # Import Absolut yang sudah dikoreksi:
 # from models.schemas import TransactionData
-from database import bulk_insert_transactions, get_db_connection, create_summary_entry, update_summary_total_records
+from database import bulk_insert_transactions, get_db_connection, create_summary_entry, update_summary_total_records, count_transactions_for_summary
 
 
 router = APIRouter(prefix="/v1/import", tags=["CSV Bulk Import"])
@@ -18,6 +18,7 @@ router = APIRouter(prefix="/v1/import", tags=["CSV Bulk Import"])
 @router.post("/csv")
 async def import_csv_to_db(
     csv_file: UploadFile = File(..., description="File CSV untuk diimport"),
+    title: str = Form(..., description="Judul untuk impor CSV"), # Tambahkan parameter title
 ):
     """
     API 1: Menerima file CSV, memvalidasi, membersihkan, dan melakukan bulk insert.
@@ -78,6 +79,10 @@ async def import_csv_to_db(
         df['mor'] = pd.to_numeric(df['mor'], errors='coerce')
         df['kuota'] = pd.to_numeric(df['kuota'], errors='coerce')
 
+        # Hitung duplikasi dalam batch asli sebelum drop_duplicates
+        duplicate_counts = df['transaction_id_asersi'].value_counts()
+        df['batch_original_duplicate_count'] = df['transaction_id_asersi'].map(duplicate_counts)
+
         # Menghapus duplikat berdasarkan kolom ID (transaction_id_asersi)
         df.drop_duplicates(subset=['transaction_id_asersi'], keep='first', inplace=True) 
         
@@ -91,7 +96,8 @@ async def import_csv_to_db(
             'kota_kabupaten', 'no_spbu', 'no_nozzle', 'no_dispenser', 
             'produk', 'volume_liter', 'penjualan_rupiah', 'operator', 
             'mode_transaksi', 'plat_nomor', 'nik', 'sektor_non_kendaraan', 
-            'jumlah_roda_kendaraan', 'kuota', 'warna_plat'
+            'jumlah_roda_kendaraan', 'kuota', 'warna_plat',
+            'batch_original_duplicate_count' # New column
         ]
         # Menyelaraskan DataFrame dengan urutan kolom yang benar
         df_aligned = df[cols_for_insert]
@@ -127,6 +133,32 @@ async def import_csv_to_db(
         total_kota_kabupaten = df['kota_kabupaten'].nunique()
         total_no_spbu = df['no_spbu'].nunique()
 
+        # Calculate numeric_totals
+        numeric_totals = {
+            "total_volume": float(total_volume),
+            "total_penjualan": float(total_penjualan),
+            "total_operator": float(total_operator),
+            "produk_jbt": float(produk_jbt),
+            "produk_jbkt": float(produk_jbkt),
+            "total_volume_liter": float(total_volume_liter),
+            "total_penjualan_rupiah": float(total_penjualan_rupiah),
+            "total_mode_transaksi": float(total_mode_transaksi),
+            "total_plat_nomor": float(total_plat_nomor),
+            "total_nik": float(total_nik),
+            "total_sektor_non_kendaraan": float(total_sektor_non_kendaraan),
+            "total_jumlah_roda_kendaraan_4": float(total_jumlah_roda_kendaraan_4),
+            "total_jumlah_roda_kendaraan_6": float(total_jumlah_roda_kendaraan_6),
+            "total_kuota": float(total_kuota),
+            "total_warna_plat_kuning": float(total_warna_plat_kuning),
+            "total_warna_plat_hitam": float(total_warna_plat_hitam),
+            "total_warna_plat_merah": float(total_warna_plat_merah),
+            "total_warna_plat_putih": float(total_warna_plat_putih),
+            "total_mor": float(total_mor),
+            "total_provinsi": float(total_provinsi),
+            "total_kota_kabupaten": float(total_kota_kabupaten),
+            "total_no_spbu": float(total_no_spbu),
+        }
+
         end_time = time.perf_counter()
         duration_ms = int((end_time - start_time) * 1000)
 
@@ -137,7 +169,7 @@ async def import_csv_to_db(
             import_datetime=datetime.now(),
             import_duration=float(duration_ms / 1000), # Convert ms to seconds
             file_name=file_name,
-            title=file_name, # Default title is the file name
+            title=title, # Gunakan title dari parameter
             total_records_inserted=0, # Akan diupdate setelah bulk insert
             total_records_read=df.shape[0], # Total records read from CSV
             total_volume=float(total_volume),
@@ -161,8 +193,11 @@ async def import_csv_to_db(
             total_mor=float(total_mor),
             total_provinsi=float(total_provinsi),
             total_kota_kabupaten=float(total_kota_kabupaten),
-            total_no_spbu=float(total_no_spbu)
+            total_no_spbu=float(total_no_spbu),
+            numeric_totals=json.dumps(numeric_totals) # Pass numeric_totals as JSON string
         )
+        logging.warning(f"--- [DIAGNOSTIC] numeric_totals (dict): {numeric_totals} ---")
+        logging.warning(f"--- [DIAGNOSTIC] numeric_totals (json string): {json.dumps(numeric_totals)} ---")
         logging.warning(f"--- [DIAGNOSTIC] Created summary entry with ID: {summary_id} ---")
 
         # 5. EKSEKUSI BULK INSERT
@@ -171,15 +206,17 @@ async def import_csv_to_db(
         logging.warning(f"--- [DIAGNOSTIC] Bulk insert completed. {rows_inserted} rows inserted. ---")
 
         # Update total_records_inserted di summary entry
-        update_summary_total_records(summary_id, rows_inserted)
-        logging.warning(f"--- [DIAGNOSTIC] Updated summary {summary_id} with {rows_inserted} records inserted. ---")
+        # Hitung ulang jumlah transaksi yang benar-benar terkait dengan summary_id ini
+        actual_records_in_summary = count_transactions_for_summary(summary_id)
+        update_summary_total_records(summary_id, actual_records_in_summary)
+        logging.warning(f"--- [DIAGNOSTIC] Updated summary {summary_id} with {actual_records_in_summary} records inserted. ---")
 
         return JSONResponse(
             status_code=status.HTTP_201_CREATED,
             content={
                 "message": "Import CSV berhasil diproses.",
                 "total_rows_read": df.shape[0],
-                "total_rows_inserted": rows_inserted,
+                "total_rows_inserted": actual_records_in_summary,
                 "summary_id": summary_id
             }
         )

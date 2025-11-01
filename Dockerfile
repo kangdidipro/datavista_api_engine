@@ -13,4 +13,4 @@ RUN pip install fastapi uvicorn[standard] psycopg2-binary pandas python-multipar
 COPY . /app
 
 # Perintah untuk menjalankan aplikasi (Gunicorn - Exec Form yang stabil)
-CMD ["gunicorn", "main:app", "-w", "4", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8003"]
+CMD ["sh", "-c", "python init_db.py && sleep 10 && gunicorn main:app -w 4 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:8003"]

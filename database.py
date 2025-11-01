@@ -82,20 +82,22 @@ def bulk_insert_transactions(data_tuples: List[Tuple], summary_id: int):
         'kota_kabupaten', 'no_spbu', 'no_nozzle', 'no_dispenser', 
         'produk', 'volume_liter', 'penjualan_rupiah', 'operator', 
         'mode_transaksi', 'plat_nomor', 'nik', 'sektor_non_kendaraan', 
-        'jumlah_roda_kendaraan', 'kuota', 'warna_plat', 'daily_summary_id'
+        'jumlah_roda_kendaraan', 'kuota', 'warna_plat', 'daily_summary_id',
+        'batch_original_duplicate_count'
     ]
     
     # Menambahkan summary_id (FK) ke setiap baris
     data_with_fk = [item + (summary_id,) for item in data_tuples]
     
-    # Query SQL: INSERT ... ON CONFLICT DO NOTHING (Mencegah duplikat ID)
+    # Query SQL: INSERT ... ON CONFLICT (transaction_id_asersi) DO UPDATE
     insert_query = sql.SQL("""
         INSERT INTO {} ({}) 
         VALUES %s
-        ON CONFLICT (transaction_id_asersi) DO NOTHING
+        ON CONFLICT (transaction_id_asersi) DO UPDATE SET import_attempt_count = {}.import_attempt_count + 1, daily_summary_id = EXCLUDED.daily_summary_id, batch_original_duplicate_count = EXCLUDED.batch_original_duplicate_count
     """).format(
         sql.Identifier(TRANSACTION_TABLE),
-        sql.SQL(', ').join(map(sql.Identifier, cols_for_insert))
+        sql.SQL(', ').join(map(sql.Identifier, cols_for_insert)),
+        sql.Identifier(TRANSACTION_TABLE)
     )
 
     try:
@@ -143,7 +145,8 @@ def create_summary_entry(
     total_mor,
     total_provinsi,
     total_kota_kabupaten,
-    total_no_spbu
+    total_no_spbu,
+    numeric_totals # New parameter
 ):
     """Membuat entry baru di tabel summary dan mengembalikan summary_id."""
     insert_query = sql.SQL("""
@@ -155,9 +158,9 @@ def create_summary_entry(
             total_jumlah_roda_kendaraan_4, total_jumlah_roda_kendaraan_6, total_kuota,
             total_warna_plat_kuning, total_warna_plat_hitam, total_warna_plat_merah,
             total_warna_plat_putih, total_mor, total_provinsi, total_kota_kabupaten,
-            total_no_spbu
+            total_no_spbu, numeric_totals
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         RETURNING summary_id
     """).format(sql.Identifier(SUMMARY_TABLE))
     
@@ -172,7 +175,7 @@ def create_summary_entry(
                     total_jumlah_roda_kendaraan_4, total_jumlah_roda_kendaraan_6, total_kuota,
                     total_warna_plat_kuning, total_warna_plat_hitam, total_warna_plat_merah,
                     total_warna_plat_putih, total_mor, total_provinsi, total_kota_kabupaten,
-                    total_no_spbu
+                    total_no_spbu, numeric_totals
                 ))
                 summary_id = cursor.fetchone()[0]
                 conn.commit()
@@ -201,6 +204,25 @@ def update_summary_total_records(summary_id: int, total_records_inserted: int):
         logging.error(f"Failed to update summary total records: {e}", exc_info=True)
         raise e
 
+def count_transactions_for_summary(summary_id: int) -> int:
+    """
+    Menghitung jumlah total transaksi yang terkait dengan daily_summary_id tertentu.
+    """
+    count_query = sql.SQL("""
+        SELECT COUNT(*) FROM {} WHERE daily_summary_id = %s
+    """).format(sql.Identifier(TRANSACTION_TABLE))
+
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(count_query, (summary_id,))
+                count = cursor.fetchone()[0]
+                logging.warning(f"--- [DIAGNOSTIC] count_transactions_for_summary for summary_id {summary_id} returned: {count} ---")
+                return count
+    except Exception as e:
+        logging.error(f"Failed to count transactions for summary_id {summary_id}: {e}", exc_info=True)
+        raise e
+
 # --- 3. LOGIC PEMBUATAN TABEL AWAL (Untuk digunakan di Docker Entrypoint) ---
 def create_initial_tables(conn):
     """Membuat tabel log transaksi dan summary jika belum ada."""
@@ -212,7 +234,7 @@ def create_initial_tables(conn):
         cursor = conn.cursor()
 
         CREATE_TRANSACTION_LOG = sql.SQL("""
-            CREATE TABLE IF NOT EXISTS {} (
+            CREATE TABLE {} (
                 transaction_id_asersi VARCHAR(50) NOT NULL PRIMARY KEY,
                 tanggal DATE NOT NULL,
                 jam TIME WITHOUT TIME ZONE NOT NULL,
@@ -234,19 +256,22 @@ def create_initial_tables(conn):
                 kuota NUMERIC(10,1),
                 warna_plat VARCHAR(20),
                 daily_summary_id INTEGER,
+                import_attempt_count INTEGER DEFAULT 0,
+                batch_original_duplicate_count INTEGER DEFAULT 0,
                 CONSTRAINT fk_daily_summary FOREIGN KEY (daily_summary_id)
                     REFERENCES {} (summary_id) ON DELETE CASCADE
             );
         """).format(sql.Identifier(TRANSACTION_TABLE), sql.Identifier(SUMMARY_TABLE))
 
         CREATE_SUMMARY_MASTER = sql.SQL("""
-            CREATE TABLE IF NOT EXISTS {} (
+            CREATE TABLE {} (
                 summary_id SERIAL PRIMARY KEY,
                 import_datetime TIMESTAMP WITHOUT TIME ZONE NOT NULL,
                 import_duration NUMERIC(20,3),
                 file_name VARCHAR(50),
                 title VARCHAR(50),
                 total_records_inserted INTEGER,
+                total_records_read INTEGER,
                 total_volume NUMERIC(20,3),
                 total_penjualan VARCHAR(50),
                 total_operator NUMERIC(20,3),
@@ -268,7 +293,8 @@ def create_initial_tables(conn):
                 total_mor NUMERIC(20,3),
                 total_provinsi NUMERIC(20,3),
                 total_kota_kabupaten NUMERIC(20,3),
-                total_no_spbu NUMERIC(20,3)
+                total_no_spbu NUMERIC(20,3),
+                numeric_totals JSONB
             );
         """).format(sql.Identifier(SUMMARY_TABLE))
 
