@@ -179,6 +179,16 @@ def create_summary_entry(
                 ))
                 summary_id = cursor.fetchone()[0]
                 conn.commit()
+                logging.warning(f"[DIAGNOSTIC] Successfully created summary entry with ID: {summary_id}")
+
+                # Diagnostic: Verify if the summary_id exists immediately after commit
+                verify_query = sql.SQL("SELECT COUNT(*) FROM {} WHERE summary_id = %s").format(sql.Identifier(SUMMARY_TABLE))
+                cursor.execute(verify_query, (summary_id,))
+                if cursor.fetchone()[0] == 1:
+                    logging.warning(f"[DIAGNOSTIC] Verified: summary_id {summary_id} exists in {SUMMARY_TABLE}.")
+                else:
+                    logging.error(f"[DIAGNOSTIC] ERROR: summary_id {summary_id} DOES NOT EXIST in {SUMMARY_TABLE} after commit!")
+
                 return summary_id
     except Exception as e:
         logging.error(f"Failed to create summary entry: {e}", exc_info=True)
@@ -221,6 +231,30 @@ def count_transactions_for_summary(summary_id: int) -> int:
                 return count
     except Exception as e:
         logging.error(f"Failed to count transactions for summary_id {summary_id}: {e}", exc_info=True)
+        raise e
+
+def insert_mor_if_not_exists(mor_id: int, mor: str):
+    """
+    Memasukkan mor_id dan mor ke tabel_mor jika belum ada.
+    """
+    logging.warning(f"[DIAGNOSTIC] Attempting to insert MOR: mor_id={mor_id}, mor='{mor}'")
+    check_query = sql.SQL("SELECT mor_id FROM tabel_mor WHERE mor_id = %s")
+    insert_query = sql.SQL("INSERT INTO tabel_mor (mor_id, mor, created_at, updated_at) VALUES (%s, %s, NOW(), NOW()) ON CONFLICT (mor_id) DO NOTHING")
+
+    try:
+        with get_db_connection() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(check_query, (mor_id,))
+                existing_mor = cursor.fetchone()
+                if existing_mor is None:
+                    logging.warning(f"[DIAGNOSTIC] MOR {mor_id} not found. Inserting...")
+                    cursor.execute(insert_query, (mor_id, mor))
+                    conn.commit()
+                    logging.warning(f"[DIAGNOSTIC] Successfully inserted new MOR: {mor_id} - {mor}")
+                else:
+                    logging.warning(f"[DIAGNOSTIC] MOR {mor_id} - {mor} already exists. Skipping insert.")
+    except Exception as e:
+        logging.error(f"Failed to insert MOR {mor_id} - {mor}: {e}", exc_info=True)
         raise e
 
 # --- 3. LOGIC PEMBUATAN TABEL AWAL (Untuk digunakan di Docker Entrypoint) ---

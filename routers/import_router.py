@@ -10,7 +10,7 @@ import json
 from datetime import datetime
 # Import Absolut yang sudah dikoreksi:
 # from models.schemas import TransactionData
-from database import bulk_insert_transactions, get_db_connection, create_summary_entry, update_summary_total_records, count_transactions_for_summary
+from database import bulk_insert_transactions, get_db_connection, create_summary_entry, update_summary_total_records, count_transactions_for_summary, insert_mor_if_not_exists
 
 
 router = APIRouter(prefix="/v1/import", tags=["CSV Bulk Import"])
@@ -88,6 +88,14 @@ async def import_csv_to_db(
         
         # Mengganti NaN dengan None (Wajib untuk insert Psycopg2/PostgreSQL)
         df = df.replace({pd.NA: None, float('nan'): None, '': None})
+
+        # --- Tambahkan MOR ke tabel_mor jika belum ada ---
+        unique_mors = df[['mor']].dropna().drop_duplicates()
+        logging.warning(f"[DIAGNOSTIC] Unique MORs extracted from CSV: {unique_mors.to_dict(orient='records')}")
+        for index, row in unique_mors.iterrows():
+            mor_id = int(row['mor'])
+            mor_name = f"MOR {mor_id}" # Asumsi format nama MOR
+            insert_mor_if_not_exists(mor_id, mor_name)
         
         # 3. PERSIAPAN DATA
         # Memastikan urutan kolom sesuai dengan yang diharapkan oleh 'bulk_insert_transactions'
