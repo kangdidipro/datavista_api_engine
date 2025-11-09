@@ -267,76 +267,76 @@ def create_initial_tables(conn):
         # NOTE: Pastikan semua kolom dari cols_for_insert didefinisikan di sini
         cursor = conn.cursor()
 
-        CREATE_TRANSACTION_LOG = sql.SQL("""
-            CREATE TABLE {} (
-                transaction_id_asersi VARCHAR(50) NOT NULL PRIMARY KEY,
-                tanggal DATE NOT NULL,
-                jam TIME WITHOUT TIME ZONE NOT NULL,
-                mor INTEGER,
-                provinsi VARCHAR(50),
-                kota_kabupaten VARCHAR(50),
-                no_spbu VARCHAR(20),
-                no_nozzle VARCHAR(20),
-                no_dispenser VARCHAR(50),
-                produk VARCHAR(50),
-                volume_liter NUMERIC(10,3),
-                penjualan_rupiah VARCHAR(50),
-                operator VARCHAR(50),
-                mode_transaksi VARCHAR(50),
-                plat_nomor VARCHAR(20),
-                nik VARCHAR(30),
-                sektor_non_kendaraan VARCHAR(50),
-                jumlah_roda_kendaraan VARCHAR(50),
-                kuota NUMERIC(10,1),
-                warna_plat VARCHAR(20),
-                daily_summary_id INTEGER,
-                import_attempt_count INTEGER DEFAULT 0,
-                batch_original_duplicate_count INTEGER DEFAULT 0,
-                CONSTRAINT fk_daily_summary FOREIGN KEY (daily_summary_id)
-                    REFERENCES {} (summary_id) ON DELETE CASCADE
-            );
-        """).format(sql.Identifier(TRANSACTION_TABLE), sql.Identifier(SUMMARY_TABLE))
+        # CREATE_TRANSACTION_LOG = sql.SQL("""
+        #     CREATE TABLE {} (
+        #         transaction_id_asersi VARCHAR(50) NOT NULL PRIMARY KEY,
+        #         tanggal DATE NOT NULL,
+        #         jam TIME WITHOUT TIME ZONE NOT NULL,
+        #         mor INTEGER,
+        #         provinsi VARCHAR(50),
+        #         kota_kabupaten VARCHAR(50),
+        #         no_spbu VARCHAR(20),
+        #         no_nozzle VARCHAR(20),
+        #         no_dispenser VARCHAR(50),
+        #         produk VARCHAR(50),
+        #         volume_liter NUMERIC(10,3),
+        #         penjualan_rupiah VARCHAR(50),
+        #         operator VARCHAR(50),
+        #         mode_transaksi VARCHAR(50),
+        #         plat_nomor VARCHAR(20),
+        #         nik VARCHAR(30),
+        #         sektor_non_kendaraan VARCHAR(50),
+        #         jumlah_roda_kendaraan VARCHAR(50),
+        #         kuota NUMERIC(10,1),
+        #         warna_plat VARCHAR(20),
+        #         daily_summary_id INTEGER,
+        #         import_attempt_count INTEGER DEFAULT 0,
+        #         batch_original_duplicate_count INTEGER DEFAULT 0,
+        #         CONSTRAINT fk_daily_summary FOREIGN KEY (daily_summary_id)
+        #             REFERENCES {} (summary_id) ON DELETE CASCADE
+        #     );
+        # """).format(sql.Identifier(TRANSACTION_TABLE), sql.Identifier(SUMMARY_TABLE))
 
-        CREATE_SUMMARY_MASTER = sql.SQL("""
-            CREATE TABLE {} (
-                summary_id SERIAL PRIMARY KEY,
-                import_datetime TIMESTAMP WITHOUT TIME ZONE NOT NULL,
-                import_duration NUMERIC(20,3),
-                file_name VARCHAR(50),
-                title VARCHAR(50),
-                total_records_inserted INTEGER,
-                total_records_read INTEGER,
-                total_volume NUMERIC(20,3),
-                total_penjualan VARCHAR(50),
-                total_operator NUMERIC(20,3),
-                produk_jbt VARCHAR(50),
-                produk_jbkt VARCHAR(50),
-                total_volume_liter NUMERIC(10,3),
-                total_penjualan_rupiah VARCHAR(50),
-                total_mode_transaksi VARCHAR(50),
-                total_plat_nomor VARCHAR(20),
-                total_nik VARCHAR(30),
-                total_sektor_non_kendaraan VARCHAR(50),
-                total_jumlah_roda_kendaraan_4 VARCHAR(50),
-                total_jumlah_roda_kendaraan_6 VARCHAR(50),
-                total_kuota NUMERIC(10,1),
-                total_warna_plat_kuning VARCHAR(20),
-                total_warna_plat_hitam VARCHAR(20),
-                total_warna_plat_merah VARCHAR(20),
-                total_warna_plat_putih VARCHAR(20),
-                total_mor NUMERIC(20,3),
-                total_provinsi NUMERIC(20,3),
-                total_kota_kabupaten NUMERIC(20,3),
-                total_no_spbu NUMERIC(20,3),
-                numeric_totals JSONB
-            );
-        """).format(sql.Identifier(SUMMARY_TABLE))
+        # CREATE_SUMMARY_MASTER = sql.SQL("""
+        #     CREATE TABLE {} (
+        #         summary_id SERIAL PRIMARY KEY,
+        #         import_datetime TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+        #         import_duration NUMERIC(20,3),
+        #         file_name VARCHAR(50),
+        #         title VARCHAR(50),
+        #         total_records_inserted INTEGER,
+        #         total_records_read INTEGER,
+        #         total_volume NUMERIC(20,3),
+        #         total_penjualan VARCHAR(50),
+        #         total_operator NUMERIC(20,3),
+        #         produk_jbt VARCHAR(50),
+        #         produk_jbkt VARCHAR(50),
+        #         total_volume_liter NUMERIC(10,3),
+        #         total_penjualan_rupiah VARCHAR(50),
+        #         total_mode_transaksi VARCHAR(50),
+        #         total_plat_nomor VARCHAR(20),
+        #         total_nik VARCHAR(30),
+        #         total_sektor_non_kendaraan VARCHAR(50),
+        #         total_jumlah_roda_kendaraan_4 VARCHAR(50),
+        #         total_jumlah_roda_kendaraan_6 VARCHAR(50),
+        #         total_kuota NUMERIC(10,1),
+        #         total_warna_plat_kuning VARCHAR(20),
+        #         total_warna_plat_hitam VARCHAR(20),
+        #         total_warna_plat_merah VARCHAR(20),
+        #         total_warna_plat_putih VARCHAR(20),
+        #         total_mor NUMERIC(20,3),
+        #         total_provinsi NUMERIC(20,3),
+        #         total_kota_kabupaten NUMERIC(20,3),
+        #         total_no_spbu NUMERIC(20,3),
+        #         numeric_totals JSONB
+        #     );
+        # """).format(sql.Identifier(SUMMARY_TABLE))
 
-        # Jalankan kueri
-        cursor.execute(CREATE_SUMMARY_MASTER)
-        cursor.execute(CREATE_TRANSACTION_LOG)
-        conn.commit()
-        logging.warning("SCHEMAS CREATED SUCCESSFULLY") # Tanda keberhasilan
+        # # Jalankan kueri
+        # cursor.execute(CREATE_SUMMARY_MASTER)
+        # cursor.execute(CREATE_TRANSACTION_LOG)
+        # conn.commit()
+        # logging.warning("SCHEMAS CREATED SUCCESSFULLY") # Tanda keberhasilan
 
     except psycopg2.Error as e:
         # DEBUG KRITIS: Tampilkan error SQL sebenarnya

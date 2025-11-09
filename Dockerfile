@@ -8,7 +8,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y curl postgresql-client
 
 # Instal dependencies (FastAPI, Pandas, Psycopg2, Redis, Gunicorn)
-RUN pip install fastapi uvicorn[standard] psycopg2-binary pandas python-multipart redis gunicorn rq sqlalchemy requests
+RUN pip install fastapi uvicorn[standard] psycopg2-binary pandas python-multipart redis gunicorn rq sqlalchemy requests alembic
 # Salin kode aplikasi (main.py, db_config.py, routers/, models/, dll.)
 COPY . /app
 
