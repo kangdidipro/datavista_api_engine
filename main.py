@@ -16,6 +16,7 @@ from routers.import_router import router as import_router
 from routers.video_router import router as video_router
 from routers.anomaly_router import router as anomaly_router
 from routers.export_router import router as export_router
+from routers.summary_router import router as summary_router
 
 
 # --- 1. INISIALISASI APLIKASI (DEKLARASI 'app' - CRITICAL FIX) ---
@@ -92,3 +93,4 @@ app.include_router(import_router)
 app.include_router(anomaly_router)
 app.include_router(video_router)
 app.include_router(export_router)
+app.include_router(summary_router)

@@ -56,6 +56,64 @@ def duplicate_template(db: Session, template_id: int):
 def delete_template(db: Session, template_id: int):
     template = get_template(db, template_id)
     if template:
-        db.delete(template)
-        db.commit()
     return template
+
+# CRUD for SpecialAnomalyCriteria
+def get_special_criteria(db: Session, special_criteria_id: int):
+    return db.query(models.SpecialAnomalyCriteria).filter(models.SpecialAnomalyCriteria.special_criteria_id == special_criteria_id).first()
+
+def get_all_special_criteria(db: Session):
+    return db.query(models.SpecialAnomalyCriteria).all()
+
+def create_special_criteria(db: Session, criteria: schemas.SpecialAnomalyCriteriaCreate):
+    db_criteria = models.SpecialAnomalyCriteria(**criteria.dict())
+    db.add(db_criteria)
+    db.commit()
+    db.refresh(db_criteria)
+    return db_criteria
+
+def update_special_criteria(db: Session, special_criteria_id: int, criteria: schemas.SpecialAnomalyCriteriaUpdate):
+    db_criteria = get_special_criteria(db, special_criteria_id)
+    if db_criteria:
+        for key, value in criteria.dict(exclude_unset=True).items():
+            setattr(db_criteria, key, value)
+        db.commit()
+        db.refresh(db_criteria)
+    return db_criteria
+
+def delete_special_criteria(db: Session, special_criteria_id: int):
+    db_criteria = get_special_criteria(db, special_criteria_id)
+    if db_criteria:
+        db.delete(db_criteria)
+        db.commit()
+    return db_criteria
+
+# CRUD for TransactionAnomalyCriteria
+def get_transaction_criteria(db: Session, criteria_id: int):
+    return db.query(models.TransactionAnomalyCriteria).filter(models.TransactionAnomalyCriteria.criteria_id == criteria_id).first()
+
+def get_all_transaction_criteria(db: Session):
+    return db.query(models.TransactionAnomalyCriteria).all()
+
+def create_transaction_criteria(db: Session, criteria: schemas.TransactionAnomalyCriteriaCreate):
+    db_criteria = models.TransactionAnomalyCriteria(**criteria.dict())
+    db.add(db_criteria)
+    db.commit()
+    db.refresh(db_criteria)
+    return db_criteria
+
+def update_transaction_criteria(db: Session, criteria_id: int, criteria: schemas.TransactionAnomalyCriteriaUpdate):
+    db_criteria = get_transaction_criteria(db, criteria_id)
+    if db_criteria:
+        for key, value in criteria.dict(exclude_unset=True).items():
+            setattr(db_criteria, key, value)
+        db.commit()
+        db.refresh(db_criteria)
+    return db_criteria
+
+def delete_transaction_criteria(db: Session, criteria_id: int):
+    db_criteria = get_transaction_criteria(db, criteria_id)
+    if db_criteria:
+        db.delete(db_criteria)
+        db.commit()
+    return db_criteria
