@@ -224,6 +224,13 @@ class AnomalyExecutionBatch(Base):
     summary_id = Column(Integer, ForeignKey('csv_summary_master_daily.summary_id', ondelete="CASCADE"), nullable=False)
     batch_status = Column(String(50))
     anomalies_found = Column(Integer, default=0)
+    # Kolom untuk menyimpan nilai anomali P1-P6
+    p1_anomaly_value = Column(String, default="NA")
+    p2_anomaly_value = Column(String, default="NA")
+    p3_anomaly_value = Column(String, default="NA")
+    p4_anomaly_value = Column(String, default="NA")
+    p5_anomaly_value = Column(String, default="NA")
+    p6_anomaly_value = Column(String, default="NA")
 
     execution = relationship("AnomalyExecution", back_populates="execution")
     summary = relationship("CsvSummaryMasterDaily")

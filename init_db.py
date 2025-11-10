@@ -162,8 +162,8 @@ if __name__ == "__main__":
     # if not drop_and_recreate_db():
     #     sys.exit(1)
 
-    if not run_alembic_migrations():
-        sys.exit(1)
+    # if not run_alembic_migrations():
+    #     sys.exit(1)
 
     # PENTING: Tunggu sebentar setelah migrasi, sebelum mencoba koneksi aplikasi biasa
     time.sleep(10) 

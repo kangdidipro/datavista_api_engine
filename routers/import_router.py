@@ -10,7 +10,7 @@ import json
 from datetime import datetime
 # Import Absolut yang sudah dikoreksi:
 # from models.schemas import TransactionData
-from database import bulk_insert_transactions, get_db_connection, create_summary_entry, update_summary_total_records, count_transactions_for_summary, insert_mor_if_not_exists
+from app.database import bulk_insert_transactions, get_db_connection, create_summary_entry, update_summary_total_records, count_transactions_for_summary, insert_mor_if_not_exists
 
 
 router = APIRouter(prefix="/v1/import", tags=["CSV Bulk Import"])

@@ -19,8 +19,8 @@ if config.config_file_name is not None:
 import sys
 import os
 sys.path.insert(0, os.path.abspath('.')) # Add current directory to path
-from models.base import Base # Import Base from models.base
-from models.models import (
+from app.models import Base # Import Base from models.base
+from app.models import (
     AnomalyTemplateMaster, TransactionAnomalyCriteria, SpecialAnomalyCriteria,
     VideoAiParameter, TemplateCriteriaVolume, TemplateCriteriaSpecial,
     LogManajemenFilterDtpa, HasilAnalisisDtpa, AccumulatedAnomalyCriteria,

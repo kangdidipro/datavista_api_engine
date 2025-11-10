@@ -3,12 +3,12 @@ from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime
 
-from database import get_db
-from models import schemas
+from app.database import get_db
+from app.schemas import CsvSummaryMasterDaily
 
 router = APIRouter(prefix="/v1/summary", tags=["CSV Summary"])
 
-@router.get("/daily", response_model=List[schemas.CsvSummaryMasterDaily])
+@router.get("/daily", response_model=List[CsvSummaryMasterDaily])
 def get_all_csv_summaries(db: Session = Depends(get_db)):
     """
     Mengambil semua entri dari tabel csv_summary_master_daily.
@@ -16,7 +16,7 @@ def get_all_csv_summaries(db: Session = Depends(get_db)):
     summaries = db.query(schemas.CsvSummaryMasterDaily).all()
     return summaries
 
-@router.get("/daily/{summary_id}", response_model=schemas.CsvSummaryMasterDaily)
+@router.get("/daily/{summary_id}", response_model=CsvSummaryMasterDaily)
 def get_csv_summary_by_id(summary_id: int, db: Session = Depends(get_db)):
     """
     Mengambil entri csv_summary_master_daily berdasarkan summary_id.
